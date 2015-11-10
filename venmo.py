@@ -262,7 +262,7 @@ def help(response_url):
            'venmo complete accept/reject number\n'
            '    accept OR reject a payment with the given ID\n'
            'venmo code code\n'
-           '    code = Venmo authentication code'
+           '    code = Venmo authentication code\n'
            'venmo help\n'
            '    this help message')
     respond(message, response_url)
