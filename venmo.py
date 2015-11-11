@@ -198,9 +198,9 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
             elif (target['type'] == 'email'):
                 name = target['email']
             if (amount_str.startswith('-')):
-                final_message += 'Successfully charged ' + name + ' $' '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
+                final_message += 'Successfully charged ' + name + ' $' + '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
             else:
-                final_message += 'Successfully paid ' + name + ' $' '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
+                final_message += 'Successfully paid ' + name + ' $' + '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
     respond(final_message, response_url)
 
 def venmo_pending(which, access_token, venmo_id, response_url):
@@ -225,13 +225,29 @@ def venmo_pending(which, access_token, venmo_id, response_url):
     else:
         respond('No pending Venmos', response_url)
 
-def venmo_complete(which, number, access_token, response_url):
+def venmo_complete(which, number, access_token, venmo_id, response_url):
     url = 'https://api.venmo.com/v1/payments/' + str(number)
     action = ''
     if (which == 'accept'):
         action = 'approve'
     elif (which == 'reject'):
         action = 'deny'
+    elif (which == 'cancel'):
+        action = 'cancel'
+    check_url = 'https://api.venmo.com/v1/payments/' + str(number) + '?access_token=' + access_token
+    check_response = requests.get(check_url)
+    check_response_dict = check_response.json()
+    if ('error' in check_response_dict):
+        venmo_error(check_response_dict['error'], response_url)
+        return
+    if (check_response_dict['data']['actor']['id'] != venmo_id):
+        if (action == 'cancel'):
+            parse_error(check_response_dict['data']['actor']['display_name'] + ' requested $' + '{:0,.2f}'.format(check_response_dict['data']['amount']) + ' for ' + check_response_dict['data']['note'] + '. You cannot cancel it!', response_url)
+            return
+    else:
+        if (action == 'approve' or action == 'deny'):
+            parse_error('You requested $' + '{:0,.2f}'.format(check_response_dict['data']['amount']) + ' for ' + check_response_dict['data']['note'] + '. You can try venmo complete cancel ' + str(number) + " if you don't want to be paid back.", response_url)
+            return
     put_data = {
         'access_token': access_token,
         'action': action
@@ -241,7 +257,12 @@ def venmo_complete(which, number, access_token, response_url):
     if ('error' in response_dict):
         venmo_error(response_dict['error'], response_url)
         return
-    respond('Venmo completed!', response_url)
+    if (action == 'approve'):
+        respond('Venmo completed!', response_url)
+    elif (action == 'deny'):
+        respond('Venmo denied!', response_url)
+    elif (action == 'cancel'):
+        respond('Venmo canceled!', response_url)
 
 def help(response_url):
     message = ('Venmo help\n'
@@ -259,8 +280,9 @@ def help(response_url):
            'venmo pending (to OR from)\n'
            '    returns pending venmo charges, defaults to to\n'
            '    also returns ID for payment completion\n'
-           'venmo complete accept/reject number\n'
-           '    accept OR reject a payment with the given ID\n'
+           'venmo complete accept/reject/cancel number\n'
+           '    accept OR reject pending incoming Venmos with the given ID\n'
+           '    cancel pending outgoing Venmos with the given ID\n'
            'venmo code code\n'
            '    code = Venmo authentication code\n'
            'venmo help\n'
@@ -304,18 +326,18 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
     elif (split_message[1].lower() == 'complete'):
         if (len(split_message) == 4):
             which = split_message[2].lower()
-            if (which == 'accept' or which == 'reject'):
+            if (which == 'accept' or which == 'reject' or which == 'cancel'):
                 number = -1
                 try:
                     number = int(split_message[3])
                 except:
                     parse_error('Payment completion number must be a number', response_url)
                     return
-                venmo_complete(which, number, access_token, response_url)
+                venmo_complete(which, number, access_token, venmo_id, response_url)
             else:
-                parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #', response_url)
+                parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #\nvenmo complete cancel #', response_url)
         else:
-            parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #', response_url)
+            parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #\nvenmo complete cancel #', response_url)
     elif (len(split_message) <= 2):
         parse_error('Invalid payment string', response_url)
     elif (split_message[1].lower() == 'charge' or split_message[2].lower() == 'charge' or
@@ -352,4 +374,4 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
         venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, response_url)
 
 if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False)
+    app.run(debug=False)
