@@ -41,7 +41,7 @@ def respond(message, response_url):
     response = requests.post(response_url, json=o)
     print response
 
-# Connects to mongo and returns a MongoClient test
+# Connects to mongo and returns a MongoClient
 def connect_to_mongo():
     credentials = ConfigParser.ConfigParser()
     credentials.read("credentials.ini")
@@ -286,7 +286,8 @@ def help(response_url):
            'venmo code code\n'
            '    code = Venmo authentication code\n'
            'venmo help\n'
-           '    this help message')
+           '    this help message\n'
+           'and you know I have CI for this now')
     respond(message, response_url)
 
 def venmo_error(dict, response_url):
