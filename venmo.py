@@ -41,7 +41,7 @@ def respond(message, response_url):
     response = requests.post(response_url, json=o)
     print response
 
-# Connects to mongo and returns a MongoClient test
+# Connects to mongo and returns a MongoClient
 def connect_to_mongo():
     credentials = ConfigParser.ConfigParser()
     credentials.read("credentials.ini")
