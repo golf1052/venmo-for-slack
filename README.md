@@ -1,4 +1,7 @@
 # YHackSlackPack Venmo Slash Command
+
+### The Venmo API has recently become [unavailable](https://twitter.com/venmodev/status/694304863912497152) (but my API key still works). Hopefully it becomes available again in the future.
+
 Now you have no excuse not to pay your boss back for lunch.
 
 Supports
