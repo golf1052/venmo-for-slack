@@ -154,16 +154,21 @@ def get_venmo_balance(access_token, response_url):
         return
     respond(response_dict['data']['balance'], response_url)
 
+def _get_friends(venmo_id, access_token, response_url):
+    friends_response = requests.get('https://api.venmo.com/v1/users/' + venmo_id + '/friends?access_token=' + access_token)
+    friends_response_dict = friends_response.json()
+    if ('error' in friends_response_dict):
+        venmo_error(friends_response_dict['error'], response_url)
+        return []
+    full = _get_pagination(friends_response_dict, access_token)
+    return full
+
 def venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, response_url):
     url = 'https://api.venmo.com/v1/payments'
     amount_str = str(amount)
     if (which == 'charge'):
         amount_str = '-' + amount_str
-    friends_response = requests.get('https://api.venmo.com/v1/users/' + venmo_id + '/friends?access_token=' + access_token)
-    friends_response_dict = friends_response.json()
-    if ('error' in friends_response_dict):
-        venmo_error(friends_response_dict['error'], response_url)
-    full = _get_pagination(friends_response_dict, access_token)
+    full = _get_friends(venmo_id, access_token, response_url)
     final_message = ''
     for r in recipients:
         post_data = {
@@ -202,6 +207,24 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
             else:
                 final_message += 'Successfully paid ' + name + ' $' + '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
     respond(final_message, response_url)
+
+def alias_user(user_id, id, alias, venmo_id, access_token, response_url):
+    friends = _get_friends(venmo_id, access_token, response_url)
+    friend_id = _find_friend(full, id)
+    if (friend_id == None):
+        parse_error('You are not friends with ' + id, response_url)
+        return
+    db = connect_to_mongo()
+    db.users.update_one({'_id': user_id},
+        {'$set': {
+            'alias': {
+                alias: friend_id
+                }
+            },
+         '$currentDate': {'lastModified': True}
+         })
+    respond('Alias set!', response_url)
+    return
 
 def venmo_pending(which, access_token, venmo_id, response_url):
     message = ''
@@ -277,6 +300,11 @@ def help(response_url):
            '    amount = Venmo amount\n'
            '    note = Venmo message\n'
            '    recipients = list of recipients, can specify Venmo username, phone number prefixed with phone: or email prefixed with email:\n'
+           'venmo alias id alias\n'
+           '    example: venmo alias 4u$3r1d sam\n'
+           '    set an alias for a Venmo username\n'
+           '    id = Venmo username\n'
+           '    alias = the alias for that user, must not contain spaces\n'
            'venmo pending (to OR from)\n'
            '    returns pending venmo charges, defaults to to\n'
            '    also returns ID for payment completion\n'
@@ -338,6 +366,13 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
                 parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #\nvenmo complete cancel #', response_url)
         else:
             parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #\nvenmo complete cancel #', response_url)
+    elif (split_message[1].lower() == 'alias'):
+        if (len(split_message) == 4):
+            id = split_message[2]
+            alias = split_message[3]
+            alias_user(user_id, id, alias, venmo_id, access_token, response_url)
+        else:
+            parse_error('Invalid alias command, your alias probably has a space in it', response_url)
     elif (len(split_message) <= 2):
         parse_error('Invalid payment string', response_url)
     elif (split_message[1].lower() == 'charge' or split_message[2].lower() == 'charge' or
