@@ -1,14 +1,13 @@
 # YHackSlackPack Venmo Slash Command
 
-### The Venmo API has recently become [unavailable](https://twitter.com/venmodev/status/694304863912497152) (but my API key still works). Hopefully it becomes available again in the future.
-
-Now you have no excuse not to pay your boss back for lunch.
+Now you have no excuse not to pay your boss back for lunch. Also it sends you a message on Slack when you receive a charge. Now you really have no reason.
 
 Supports
 - View balance
 - Pay/Charge by username, phone, or email
 - View pending Venmos
 - Complete/reject a pending Venmo
+- Notifications through Slack (need to configure webhook url in app settings)
 
 # Usage
 - venmo balance
@@ -37,6 +36,10 @@ Setup a Mongo database somwhere that your server can access. The app uses a Mong
 
 ## Venmo
 Register a Venmo app [here](https://venmo.com/account/settings/developer). The client id and client secret will go in your credentials.ini file.
+
+### Webhook support
+In app settings add the url where the app lives with a path of webhook (for example http://venmo-slack.example.com/webhook)  
+In your credentials.ini file add a Slack bot token so messages get sent to Slack
 
 ## Credentials
 First setup a credentials.ini file in the venmo folder. There is an example credentials_sample.ini file that should show you want you need.
