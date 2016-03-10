@@ -35,6 +35,50 @@ def process():
             parse_message('venmo ' + message, access_token, user_id, venmo_id, response_url)
     return str('')
 
+@app.route('/webhook', methods=['GET'])
+def webhook_get():
+    venmo_challenge = request.args.get('venmo_challenge')
+    return str(venmo_challenge)
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    print request.data
+    data = request.get_json()
+    print data
+    db = connect_to_mongo()
+    users = list(db.users.find())
+    user = None
+    # Sanders Lauture charged you $10 for pizza
+    message = ''
+    message += data['data']['actor']['display_name'] + ' '
+    if (data['type'] == 'payment.created'):
+        for user in users:
+            if (user['venmo']['id'] == data['data']['target']['user']['id']):
+                user = user['_id']
+                break
+        if user is None:
+            return str('')
+        if (data['data']['action'] == 'pay'):
+            message += 'paid you '
+        elif (data['data']['action'] == 'charge'):
+            message += 'charged you '
+        message += '$' + str(data['data']['amount']) + ' '
+        message += 'for ' + data['data']['note']
+        send_slack_message(message, user)
+    return str('')
+
+def send_slack_message(message, channel):
+    credentials = ConfigParser.ConfigParser()
+    credentials.read('credentials.ini')
+    bot_token = credentials.get('Slack', 'bot-token')
+    o = {}
+    o['token'] = bot_token
+    o['channel'] = channel
+    o['text'] = message
+    o['username'] = 'Venmo'
+    o['icon_url'] = 'https://s3-us-west-2.amazonaws.com/slack-files2/avatars/2015-11-10/14228813844_49fae5f9cad227c8c1b5_72.jpg'
+    response = requests.post('https://slack.com/api/chat.postMessage', data=o)
+
 def respond(message, response_url):
     o = {}
     o['text'] = message
@@ -53,13 +97,14 @@ def connect_to_mongo():
     client = MongoClient(connection_url)
     return client[db]
 
-def update_database(user_id, db, access_token, expires_date, refresh_token):
+def update_database(user_id, db, access_token, expires_date, refresh_token, id):
     return db.users.update_one({'_id': user_id},
         {'$set': {
             'venmo': {
                 'access_token': access_token,
                 'expires_in': expires_date,
-                'refresh_token': refresh_token
+                'refresh_token': refresh_token,
+                'id': id
                 }
             },
         '$currentDate': {'lastModified': True}
@@ -75,7 +120,7 @@ def get_access_token(user_id, response_url):
         user_doc = db.users.find_one({'_id': user_id})
         if (user_doc == None):
             create_user_doc = db.users.insert_one({'_id': user_id})
-        create_venmo_auth = update_database(user_id, db, '', '', '')
+        create_venmo_auth = update_database(user_id, db, '', '', '', '')
         auth_url = 'https://api.venmo.com/v1/oauth/authorize?client_id=' + config.get('Venmo', 'clientId') + '&scope=make_payments%20access_payment_history%20access_feed%20access_profile%20access_email%20access_phone%20access_balance%20access_friends&response_type=code'
         url_message = ('Authenticate to Venmo with the following URL: ' + auth_url + ' then send back the auth code in this format\n'
                        'venmo code CODE')
@@ -95,7 +140,8 @@ def get_access_token(user_id, response_url):
             access_token = response_dict['access_token']
             expires_in = response_dict['expires_in']
             expires_date = (datetime.datetime.utcnow().replace(tzinfo = pytz.utc) + datetime.timedelta(seconds=expires_in))
-            update_database(user_id, db, access_token, expires_date, response_dict['refresh_token'])
+            id = response_dict['user']['id']
+            update_database(user_id, db, access_token, expires_date, response_dict['refresh_token'], id)
             return access_token
         return venmo_auth['venmo']['access_token']
 
@@ -114,7 +160,8 @@ def complete_auth(code, user_id, response_url):
     expires_in = response_dict['expires_in']
     expires_date = (datetime.datetime.utcnow().replace(tzinfo = pytz.utc) + datetime.timedelta(seconds=expires_in))
     refresh_token = response_dict['refresh_token']
-    update_access_token = update_database(user_id, db, access_token, expires_date, refresh_token)
+    id = response_dict['user']['id']
+    update_access_token = update_database(user_id, db, access_token, expires_date, refresh_token, id)
     respond('Authentication complete!', response_url)
 
 def _get_venmo_id(access_token):
@@ -409,4 +456,4 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
         venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, response_url)
 
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=True, use_reloader=False)

@@ -101,3 +101,4 @@ $RECYCLE.BIN/
 *.lnk
 credentials.ini
 venmo-for-slack.pyproj
+.vs/venmo-for-slack/v14/.suo
