@@ -42,15 +42,11 @@ def webhook_get():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    print request.data
     data = request.get_json()
-    print data
     db = connect_to_mongo()
     users = list(db.users.find())
     user = None
-    # Sanders Lauture charged you $10 for pizza
     message = ''
-    message += data['data']['actor']['display_name'] + ' '
     if (data['type'] == 'payment.created'):
         for user in users:
             if (user['venmo']['id'] == data['data']['target']['user']['id']):
@@ -58,11 +54,29 @@ def webhook():
                 break
         if user is None:
             return str('')
+        message += data['data']['actor']['display_name'] + ' '
         if (data['data']['action'] == 'pay'):
             message += 'paid you '
         elif (data['data']['action'] == 'charge'):
             message += 'charged you '
         message += '$' + str(data['data']['amount']) + ' '
+        message += 'for ' + data['data']['note']
+        send_slack_message(message, user)
+    elif (data['type'] == 'payment.updated'):
+        if (data['data']['target']['type'] != 'user'):
+            return str('')
+        for user in users:
+            if (user['venmo']['id'] == data['data']['actor']['id']):
+                user = user['_id']
+                break
+        if user is None:
+            return str('')
+        message += data['data']['target']['user']['display_name'] + ' '
+        if (data['data']['status'] == 'settled'):
+            message += 'accepted your '
+        elif (data['data']['status'] == 'cancelled'):
+            message += 'rejected your '
+        message += '$' + str(data['data']['amount']) + ' charge '
         message += 'for ' + data['data']['note']
         send_slack_message(message, user)
     return str('')
@@ -83,7 +97,6 @@ def respond(message, response_url):
     o = {}
     o['text'] = message
     response = requests.post(response_url, json=o)
-    print response
 
 # Connects to mongo and returns a MongoClient
 def connect_to_mongo():
@@ -115,7 +128,6 @@ def get_access_token(user_id, response_url):
     config.read('credentials.ini')
     db = connect_to_mongo()
     venmo_auth = db.users.find_one({'_id': user_id}, {'venmo': 1})
-    print venmo_auth
     if (venmo_auth == None or 'venmo' not in venmo_auth or venmo_auth['venmo']['access_token'] == ''):
         user_doc = db.users.find_one({'_id': user_id})
         if (user_doc == None):
