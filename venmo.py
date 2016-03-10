@@ -468,4 +468,4 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
         venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, response_url)
 
 if __name__ == '__main__':
-    app.run(debug=True, use_reloader=False)
+    app.run(debug=False, use_reloader=False)
