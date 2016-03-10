@@ -61,7 +61,12 @@ def webhook():
             message += 'charged you '
         message += '$' + str(data['data']['amount']) + ' '
         message += 'for ' + data['data']['note']
+        if (data['data']['action'] == 'charge'):
+            message += ' | ID: ' + data['data']['id']
         send_slack_message(message, user)
+        if (data['data']['action'] == 'charge'):
+            accept_command = '/venmo complete accept ' + data['data']['id']
+            send_slack_message(accept_command, user)
     elif (data['type'] == 'payment.updated'):
         if (data['data']['target']['type'] != 'user'):
             return str('')
