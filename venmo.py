@@ -1,4 +1,4 @@
-﻿from flask import Flask, request
+﻿from flask import Flask, request, send_from_directory
 import ConfigParser
 import requests
 import datetime
@@ -8,6 +8,17 @@ import json
 from pymongo import MongoClient
 
 app = Flask(__name__)
+
+@app.route('/', methods=['GET'])
+def index():
+    if 'code' in request.args:
+        return send_from_directory('', 'code.html')
+    else:
+        return send_from_directory('', 'index.html')
+
+@app.route('/js/<path:filename>', methods=['GET'])
+def serve_js(filename):
+    return send_from_directory('js', filename)
 
 @app.route('/', methods=['POST'])
 def process():
