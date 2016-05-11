@@ -10,9 +10,9 @@ Supports
 - Notifications through Slack (need to configure webhook url in app settings)
 
 # Usage
-- venmo balance
+- /venmo balance
   - returns your Venmo balance
-- venmo (audience) pay/charge amount for note to recipients
+- /venmo (audience) pay/charge amount for note to recipients
   - example: venmo public charge $10.00 for lunch to testuser phone:5555555555 email:example@example.com
   - audience (optional) = public OR friends OR private
     - defaults to friends if omitted
@@ -20,14 +20,17 @@ Supports
   - amount = Venmo amount
   - note = Venmo message
   - recipients = list of recipients, can specify Venmo username, phone number prefixed with phone: or email prefixed with email:
-- venmo pending (to OR from)
+- /venmo alias id alias
+  - example: /venmo alias 4u$3r1d sam
+  - set an alias for a Venmo username
+- /venmo pending (to OR from)
   - returns pending venmo charges, defaults to to
   - also returns ID for payment completion
-- venmo complete accept/reject number
+- /venmo complete accept/reject number
   - accept OR reject a payment with the given ID
-- venmo code code
+- /venmo code code
   - code = Venmo authentication code
-- venmo help
+- /venmo help
   - this help message
   
 # Setup

@@ -20,6 +20,10 @@ def index():
 def serve_js(filename):
     return send_from_directory('js', filename)
 
+@app.route('/css/<path:filename>', methods=['GET'])
+def serve_css(filename):
+    return send_from_directory('css', filename)
+
 @app.route('/', methods=['POST'])
 def process():
     credentials = ConfigParser.ConfigParser()

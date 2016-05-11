@@ -2,45 +2,62 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>YHackSlackPack</title>
+    <title>Venmo for Slack</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
 <div class="container">
-    <img class="center-block" src="http://i.imgur.com/FjiKuNc.png" alt="YHACKSLACKPACK">
-    <h3>What is YHackSlackPack?</h3>
-    <p>
-        A collection of slack integrations to make your life easier and your work flow-ier.
-        Interactions with the external services are text-based, via a bot. 
-        There are 3 integrations provided out-of-the-box, but they're all built on a framework that makes it easy to add more. All you need is an API!
-    </p>
-    <h3>Venmo</h3>
-    <p>
-        Venmo...through Slack.
-        <br>
-        It works.
-        <br>
-        You have no excuse for not paying your boss for lunch.
-    </p>
-    <h3>Tinder</h3>
-    <p>
-        Swipe right without taking out your phone.
-        <br>
-        Uses Facebook for authentication.
-    </p>
-    <h3>Uber</h3>
-    <p>
-        It's like Uber for Uber, through Slack.
-        <br>
-        This feature is still under development.
-    </p>
-    <h3>Authors and Contributors</h3>
-    <p>
-        Sanders Lauture <a href="https://github.com/golf1052">@golf1052</a><br>
-        Andrew Knueven <a href="https://github.com/knuevena">@knuevena</a><br>
-        Tevin Otieno <a href="https://github.com/motevin">@motevin</a>
-    </p>
-    <h4>Created at YHACK 2015</h4>
+    <h1 class="text-center">Venmo for Slack</h1>
+    <h6 class="text-center">(not official in anyway whatsoever)</h6>
+    <br>
+    <h2>Commands</h2>
+    <h4>/venmo balance</h4>
+    <div class="indent">
+        <p>Returns your Venmo balance</p>
+        <p>Example: <code>/venmo balance</code></p>
+    </div>
+    <h4>/venmo (audience:optional) pay/charge amount for {note:required} to {recipients:required}</h4>
+    <div class="indent">
+        <p>Pay or charge the given amount to the specified recipients. Defaults to friends</p>
+        <p>audience (optional): public, friends, or private. Defaults to friends if omitted.</p>
+        <p>pay or charge: pay or charge the specified recipients.</p>
+        <p>amount: The amount. Must start with $</p>
+        <p>note: The Venmo note.</p>
+        <p>recipients: A list of recipients, can use their Venmo username (must be Venmo friends with them), phone number prefiexed with phone (example <code>phone:4015556666</code>), or email prefixed with email (example <code>email:example@example.com</code>)</p>
+        <p>Example: <code>/venmo charge $10 for lunch to boss phone:4015556666 email:example@example.com</code></p>
+        <p>Example: <code>/venmo private charge $25 for dinner to a-user another-user</code></p>
+    </div>
+    <h4>/venmo alias {id:required} {alias:required}</h4>
+    <div class="indent">
+        <p>Set an alias for a Venmo username</p>
+        <p>id: Venmo username</p>
+        <p>alias: The alias for that user, must not contain spaces.</p>
+        <p>Example: <code>/venmo alias 4u$3r1d sam</code></p>
+    </div>
+    <h4>/venmo pending (to/from:optional)</h4>
+    <div class="indent">
+        <p>Returns pending Venmo charges. Also returns ID for payment completion. Defaults to to</p>
+        <p>Example: <code>/venmo pending</code></p>
+        <p>Example: <code>/venmo pending to</code></p>
+        <p>Example: <code>/venmo pending from</code></p>
+    </div>
+    <h4>/venmo complete {accept/reject/cancel:required} {id:required}</h4>
+    <div class="indent">
+        <p>accept/reject pending incoming Venmos with the specified ID</p>
+        <p>cancel pending outgoing Venmos with the specified ID</p>
+        <p>id: The Venmo payment ID</p>
+        <p>Example: <code>/venmo complete accept 987134987329743243</code></p>
+    </div>
+    <h4>/venmo code {code:required}</h4>
+    <div class="indent">
+        <p>Authenticate to Venmo with the specified code. You must authenticate before you can start using other commands.</p>
+        <p>code: Venmo authentication code</p>
+    </div>
+    <h4>/venmo help</h4>
+    <div class="indent">
+        <p>This help text</p>
+    </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js" charset="utf-8"></script>
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
