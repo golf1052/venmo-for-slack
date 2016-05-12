@@ -74,7 +74,7 @@ def webhook():
             message += 'paid you '
         elif (data['data']['action'] == 'charge'):
             message += 'charged you '
-        message += '$' + str(data['data']['amount']) + ' '
+        message += '$' + '{:0,.2f}'.format(data['data']['amount']) + ' '
         message += 'for ' + data['data']['note']
         if (data['data']['action'] == 'charge'):
             message += ' | ID: ' + data['data']['id']
@@ -96,7 +96,7 @@ def webhook():
             message += 'accepted your '
         elif (data['data']['status'] == 'cancelled'):
             message += 'rejected your '
-        message += '$' + str(data['data']['amount']) + ' charge '
+        message += '$' + '{:0,.2f}'.format(data['data']['amount']) + ' charge '
         message += 'for ' + data['data']['note']
         send_slack_message(message, user)
     return str('')
