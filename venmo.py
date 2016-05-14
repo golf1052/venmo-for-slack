@@ -242,12 +242,12 @@ def _get_friends(venmo_id, access_token, response_url):
     full = _get_pagination(friends_response_dict, access_token)
     return full
 
-def venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, response_url):
+def venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, response_url):
     url = 'https://api.venmo.com/v1/payments'
     amount_str = str(amount)
     if (which == 'charge'):
         amount_str = '-' + amount_str
-    full = _get_friends(venmo_id, access_token, response_url)
+    full = None
     final_message = ''
     for r in recipients:
         post_data = {
@@ -260,8 +260,12 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
             id = r[6:]
             post_data['email'] = id
         else:
-            id = _find_friend(full, r)
-            if (id == None):
+            id = _check_alias(user_id, r)
+            if (id is None):
+                if (full is None):
+                    full = _get_friends(venmo_id, access_token, response_url)
+                id = _find_friend(full, r)
+            if (id is None):
                 parse_error('You are not friends with ' + r, response_url)
                 return
             post_data['user_id'] = id
@@ -289,7 +293,7 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
 
 def alias_user(user_id, id, alias, venmo_id, access_token, response_url):
     friends = _get_friends(venmo_id, access_token, response_url)
-    friend_id = _find_friend(full, id)
+    friend_id = _find_friend(friends, id)
     if (friend_id == None):
         parse_error('You are not friends with ' + id, response_url)
         return
@@ -304,6 +308,15 @@ def alias_user(user_id, id, alias, venmo_id, access_token, response_url):
          })
     respond('Alias set!', response_url)
     return
+
+def _check_alias(user_id, alias):
+    db = connect_to_mongo()
+    user_doc = db.users.find_one({'_id': user_id})
+    if ('alias' in user_doc):
+        aliases = user_doc['alias']
+        if (alias in aliases):
+            return aliases[alias]
+    return None
 
 def venmo_pending(which, access_token, venmo_id, response_url):
     message = ''
@@ -485,7 +498,7 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
             return
         note = ' '.join(split_message[4:to_index])
         recipients = split_message[to_index + 1:]
-        venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, response_url)
+        venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, response_url)
 
 if __name__ == '__main__':
     app.run(debug=False, use_reloader=False)
