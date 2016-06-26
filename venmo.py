@@ -410,7 +410,7 @@ def help(response_url):
            '    id = Venmo username\n'
            '    alias = the alias for that user, must not contain spaces\n'
            'venmo alias list\n'
-           '    list all aliases'
+           '    list all aliases\n'
            'venmo pending (to OR from)\n'
            '    returns pending venmo charges, defaults to to\n'
            '    also returns ID for payment completion\n'
