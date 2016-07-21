@@ -262,9 +262,13 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
         else:
             id = _check_alias(user_id, r)
             if (id is None):
-                if (full is None):
-                    full = _get_friends(venmo_id, access_token, response_url)
-                id = _find_friend(full, r)
+                id = _check_cache(user_id, r)
+                if (id is None):
+                    if (full is None):
+                        full = _get_friends(venmo_id, access_token, response_url)
+                    id = _find_friend(full, r)
+                    if (id is not None):
+                        _add_to_cache(user_id, r, id)
             if (id is None):
                 parse_error('You are not friends with ' + r, response_url)
                 return
@@ -290,6 +294,26 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
             else:
                 final_message += 'Successfully paid ' + name + ' $' + '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
     respond(final_message, response_url)
+
+def _add_to_cache(user_id, id, venmo_id):
+    db = connect_to_mongo()
+    user = db.users.find_one({'_id': user_id})
+    db.users.update_one({'_id': user_id},
+        {'$set': {
+            'cache.' + id: {'id': venmo_id}
+            },
+        '$currentDate': {'lastModified': True}
+        })
+    return
+
+def _check_cache(user_id, id):
+    db = connect_to_mongo()
+    user = db.users.find_one({'_id': user_id})
+    if ('cache' in user):
+        cache = user['cache']
+        if (id in cache):
+            return cache[id]['id']
+    return None
 
 def alias_user(user_id, id, alias, venmo_id, access_token, response_url):
     friends = _get_friends(venmo_id, access_token, response_url)
