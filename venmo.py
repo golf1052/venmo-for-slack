@@ -233,14 +233,94 @@ def get_venmo_balance(access_token, response_url):
         return
     respond(response_dict['data']['balance'], response_url)
 
+def _get_friends_count(venmo_id, access_token, response_url):
+    payload = {'access_token': access_token}
+    user_response = requests.get('https://api.venmo.com/v1/users/' + venmo_id, params=payload)
+    user_response_dict = user_response.json()
+    if 'error' in user_response_dict:
+        venmo_error(user_response_dict['error'], response_url)
+        return
+    return user_response_dict['data']['friends_count']
+
 def _get_friends(venmo_id, access_token, response_url):
-    friends_response = requests.get('https://api.venmo.com/v1/users/' + venmo_id + '/friends?access_token=' + access_token)
+    friends_count = _get_friends_count(venmo_id, access_token, response_url)
+    payload = {
+        'limit': friends_count,
+        'access_token': access_token
+    }
+    friends_response = requests.get('https://api.venmo.com/v1/users/' + venmo_id + '/friends', params=payload)
     friends_response_dict = friends_response.json()
     if 'error' in friends_response_dict:
         venmo_error(friends_response_dict['error'], response_url)
         return []
-    full = _get_pagination(friends_response_dict, access_token)
-    return full
+    return friends_response_dict['data']
+
+def _calculate_total(amount_str_array, response_url):
+    previous_number = None
+    current_sign = None
+    current_number = None
+    while len(amount_str_array) > 1:
+        for i in range(len(amount_str_array)):
+            copy = amount_str_array[i]
+            if copy.startswith('$'):
+                copy = copy[1:]
+            if copy == '+' or copy == '-' or copy == '*' or copy == '/':
+                if current_sign is None:
+                    if previous_number is None:
+                        parse_error('Invalid arithmetic string', response_url)
+                        return None
+                    current_sign = copy
+                else:
+                    parse_error('Invalid arithmetic string', response_url)
+                    return None
+            elif previous_number is None:
+                try:
+                    previous_number = float(copy)
+                except:
+                    parse_error('Could not parse ' + copy + ' into number', response_url)
+                    return None
+            elif current_number is None:
+                try:
+                    current_number = float(copy)
+                except:
+                    parse_error('Could not parse ' + copy + ' into number', response_url)
+                    return None
+                try:
+                    result = _mathify(previous_number, current_sign, current_number)
+                    result = str(result)
+                    amount_str_array[i] = result
+                    modifying_i = i
+                    del amount_str_array[modifying_i - 1]
+                    modifying_i -= 1
+                    del amount_str_array[modifying_i - 1]
+                    previous_number = None
+                    current_sign = None
+                    current_number = None
+                    break
+                except:
+                    parse_error('Invalid arithmetic string', response_url)
+                    return None
+    try:
+        final = float(amount_str_array[0])
+        final = round(final, 2)
+        return final
+    except:
+        parse_error('Could not calculate total', response_url)
+        return None
+                
+def _mathify(num1, sign, num2):
+    if num1 is None or sign is None or num2 is None:
+        raise ArithmeticError('A argument is None')
+    if sign == '+':
+        return num1 + num2
+    elif sign == '-':
+        return num1 - num2
+    elif sign == '*':
+        return num1 * num2
+    elif sign == '/':
+        return num1 / num2
+    else:
+        raise ArithmeticError('Unknown sign')
 
 def venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, response_url):
     url = 'https://api.venmo.com/v1/payments'
@@ -271,7 +351,7 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
                         _add_to_cache(user_id, r, id)
             if id is None:
                 parse_error('You are not friends with ' + r, response_url)
-                return
+                continue
             post_data['user_id'] = id
         post_data['note'] = note
         post_data['amount'] = amount_str
@@ -422,6 +502,9 @@ def help(response_url):
            '    returns your Venmo balance\n'
            'venmo (audience) pay/charge amount for note to recipients\n'
            '    example: venmo public charge $10.00 for lunch to testuser phone:5555555555 email:example@example.com\n'
+           '    supports basic arithmetic, does not follow order of operations or support parenthesis\n'
+           '    example: venmo charge 20 + 40 / 3 for brunch to a_user boss phone:5556667777\n'
+           '        this would charge $20 NOT $33.33 to each user in the recipients list\n'
            '    audience (optional) = public OR friends OR private\n'
            '        defaults to friends if omitted\n'
            '    pay/charge = pay OR charge\n'
@@ -452,6 +535,12 @@ def venmo_error(dict, response_url):
 
 def parse_error(error_message, response_url):
     respond(error_message, response_url)
+
+def _find_str_in_list(list, str):
+    for i in range(len(list)):
+        if list[i].lower() == str.lower():
+            return i
+    return -1
 
 def _find_last_str_in_list(list, str):
     index = -1
@@ -520,24 +609,20 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
         if len(split_message) <= 6:
             parse_error('Invalid payment string', response_url)
             return
-        amount_str = split_message[2]
-        amount = 0
-        if amount_str.startswith('$'):
-            amount_str = amount_str[1:]
-        try:
-            amount = float(amount_str)
-        except:
-            parse_error('Invalid amount', response_url)
-            return
-        if split_message[3].lower() != 'for':
+        for_index = _find_str_in_list(split_message, 'for')
+        if for_index == -1:
             parse_error('Invalid payment string', response_url)
+            return
+        amount_str_array = split_message[2:for_index]
+        amount = _calculate_total(amount_str_array, response_url)
+        if amount is None:
             return
         to_index = _find_last_str_in_list(split_message, 'to')
         if to_index < 5:
             parse_error('Could not find recipients', response_url)
             return
-        note = ' '.join(split_message[4:to_index])
-        recipients = split_message[to_index + 1:]
+        note = ' '.join(split_message[(for_index + 1):to_index])
+        recipients = split_message[(to_index + 1):]
         venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, response_url)
 
 if __name__ == '__main__':

@@ -27,6 +27,9 @@
         <p>recipients: A list of recipients, can use their Venmo username (must be Venmo friends with them), phone number prefiexed with phone (example <code>phone:4015556666</code>), or email prefixed with email (example <code>email:example@example.com</code>)</p>
         <p>Example: <code>/venmo charge $10 for lunch to boss phone:4015556666 email:example@example.com</code></p>
         <p>Example: <code>/venmo private charge $25 for dinner to a-user another-user</code></p>
+        <p>Also supports basic arithmetic statements. Does not follow order of operations or support parenthesis.</p>
+        <p>Example: <code>/venmo charge $20 + $40 / 3 for brunch to a_user boss phone:5556667777</code></p>
+        <p>This would charge $20 NOT $33.33 to each user in the recipients list</p>
     </div>
     <h4>/venmo alias {id:required} {alias:required}</h4>
     <div class="indent">
