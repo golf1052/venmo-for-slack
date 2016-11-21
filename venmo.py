@@ -148,7 +148,7 @@ def get_access_token(user_id, response_url):
     config.read('credentials.ini')
     db = connect_to_mongo()
     venmo_auth = db.users.find_one({'_id': user_id}, {'venmo': 1})
-    if venmo_auth == None or 'venmo' not in venmo_auth or venmo_auth['venmo']['access_token'] == '':
+    if venmo_auth == None or 'venmo' not in venmo_auth or venmo_auth['venmo'] == {} or venmo_auth['venmo']['access_token'] == '':
         user_doc = db.users.find_one({'_id': user_id})
         if user_doc == None:
             create_user_doc = db.users.insert_one({'_id': user_id})
