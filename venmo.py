@@ -126,7 +126,7 @@ def connect_to_mongo():
     user = credentials.get("Mongo", "user")
     password = credentials.get("Mongo", "password")
     db = credentials.get("Mongo", "database")
-    connection_url = "mongodb://" + user + ":" + password + "@" + host + "/" + db + "?authSource=admin"
+    connection_url = "mongodb://" + user + ":" + password + "@" + host + "/" + db
     client = MongoClient(connection_url)
     return client[db]
 
