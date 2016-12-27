@@ -45,9 +45,12 @@ def process():
                 return str('')
     access_token = get_access_token(user_id, response_url)
     if access_token != None:
-        venmo_id = _get_venmo_id(access_token)
-        if venmo_id != '':
-            parse_message('venmo ' + message, access_token, user_id, venmo_id, response_url)
+        if access_token == 'expired':
+            respond('Access token is expired, Sanders needs to debug this. So go bother him or something.', response_url)
+        else:
+            venmo_id = _get_venmo_id(access_token)
+            if venmo_id != '':
+                parse_message('venmo ' + message, access_token, user_id, venmo_id, response_url)
     return str('')
 
 @app.route('/webhook', methods=['GET'])
@@ -158,10 +161,11 @@ def get_access_token(user_id, response_url):
                        'venmo code CODE')
         respond(url_message, response_url)
         return None
-        
     else:
         expires_date = venmo_auth['venmo']['expires_in'].replace(tzinfo = pytz.utc)
         if expires_date < datetime.datetime.utcnow().replace(tzinfo = pytz.utc):
+            # for testing purposes
+            return 'expired'
             post_data = {
                 'client_id': config.get('Venmo', 'clientId'),
                 'client_secret': config.get('Venmo', 'clientSecret'),
