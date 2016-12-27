@@ -445,7 +445,6 @@ def delete_alias(user_id, alias, response_url):
     alias_obj = _get_alias(user_id, alias)
     if alias_obj is not None:
         db = connect_to_mongo()
-        user = db.users.find_one({'_id': user_id})
         db.users.update_one({'_id': user_id},
             {'$unset': {
                 'alias.' + alias: 1
@@ -456,6 +455,24 @@ def delete_alias(user_id, alias, response_url):
         respond('Alias deleted!', response_url)
     else:
         respond('That alias does not exist', response_url)
+
+def save_last_message(user_id, message):
+    db = connect_to_mongo()
+    db.users.update_one({'_id': user_id},
+        {'$set': {
+            'last': message
+            },
+        '$currentDate': {'lastModified': True}
+        }
+    )
+
+def get_last_message(user_id, response_url):
+    db = connect_to_mongo()
+    user = db.users.find_one({'_id': user_id})
+    if 'last' in user:
+        respond('/' + user['last'], response_url)
+    else:
+        respond('No last message', response_url)
     
 
 def venmo_pending(which, access_token, venmo_id, response_url):
@@ -524,6 +541,8 @@ def help(response_url):
            'Commands:\n'
            'venmo balance\n'
            '    returns your Venmo balance\n'
+           'venmo last\n'
+           '    returns your last command\n'
            'venmo (audience) pay/charge amount for note to recipients\n'
            '    example: venmo public charge $10.00 for lunch to testuser phone:5555555555 email:example@example.com\n'
            '    supports basic arithmetic, does not follow order of operations or support parenthesis\n'
@@ -583,78 +602,82 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
         help(response_url)
     elif split_message[1].lower() == 'help':
         help(response_url)
+    elif split_message[1].lower() == 'last':
+        get_last_message(user_id, response_url)
     elif split_message[1].lower() == 'code':
         complete_auth(split_message[2], user_id, response_url)
-    elif split_message[1].lower() == 'balance':
-        get_venmo_balance(access_token, response_url)
-    elif split_message[1].lower() == 'pending':
-        if len(split_message) == 2:
-            venmo_pending('to', access_token, venmo_id, response_url)
-        elif len(split_message) == 3:
-            which = split_message[2].lower()
-            if which == 'to' or which == 'from':
-                venmo_pending(which, access_token, venmo_id, response_url)
+    else:
+        save_last_message(user_id, message)
+        if split_message[1].lower() == 'balance':
+            get_venmo_balance(access_token, response_url)
+        elif split_message[1].lower() == 'pending':
+            if len(split_message) == 2:
+                venmo_pending('to', access_token, venmo_id, response_url)
+            elif len(split_message) == 3:
+                which = split_message[2].lower()
+                if which == 'to' or which == 'from':
+                    venmo_pending(which, access_token, venmo_id, response_url)
+                else:
+                    parse_error('Valid pending commands\npending\npending to\npending from', response_url)
             else:
                 parse_error('Valid pending commands\npending\npending to\npending from', response_url)
-        else:
-            parse_error('Valid pending commands\npending\npending to\npending from', response_url)
-    elif split_message[1].lower() == 'complete':
-        if len(split_message) == 4:
-            which = split_message[2].lower()
-            if which == 'accept' or which == 'reject' or which == 'cancel':
-                number = -1
-                try:
-                    number = int(split_message[3])
-                except:
-                    parse_error('Payment completion number must be a number', response_url)
-                    return
-                venmo_complete(which, number, access_token, venmo_id, response_url)
+        elif split_message[1].lower() == 'complete':
+            if len(split_message) == 4:
+                which = split_message[2].lower()
+                if which == 'accept' or which == 'reject' or which == 'cancel':
+                    number = -1
+                    try:
+                        number = int(split_message[3])
+                    except:
+                        parse_error('Payment completion number must be a number', response_url)
+                        return
+                    venmo_complete(which, number, access_token, venmo_id, response_url)
+                else:
+                    parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #\nvenmo complete cancel #', response_url)
             else:
                 parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #\nvenmo complete cancel #', response_url)
-        else:
-            parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #\nvenmo complete cancel #', response_url)
-    elif split_message[1].lower() == 'alias':
-        if len(split_message) == 4:
-            if split_message[2].lower() == 'delete':
-                delete_alias(user_id, split_message[3].lower(), response_url)
+        elif split_message[1].lower() == 'alias':
+            if len(split_message) == 4:
+                if split_message[2].lower() == 'delete':
+                    delete_alias(user_id, split_message[3].lower(), response_url)
+                else:
+                    id = split_message[2]
+                    alias = split_message[3].lower()
+                    alias_user(user_id, id, alias, venmo_id, access_token, response_url)
+            elif len(split_message) == 3 and split_message[2].lower() == 'list':
+                list_aliases(user_id, response_url)
             else:
-                id = split_message[2]
-                alias = split_message[3].lower()
-                alias_user(user_id, id, alias, venmo_id, access_token, response_url)
-        elif len(split_message) == 3 and split_message[2].lower() == 'list':
-            list_aliases(user_id, response_url)
-        else:
-            parse_error('Invalid alias command, your alias probably has a space in it', response_url)
-    elif len(split_message) <= 2:
-        parse_error('Invalid payment string', response_url)
-    elif (split_message[1].lower() == 'charge' or split_message[2].lower() == 'charge' or
-          split_message[1].lower() == 'pay' or split_message[2].lower() == 'pay'):
-        audience = 'friends'
-        if split_message[2].lower() == 'charge' or split_message[2].lower() == 'pay':
-            audience = split_message[1].lower()
-            if audience != 'public' and audience != 'friends' and audience != 'private':
-                parse_error('Valid payment sharing commands\npublic\nfriend\nprivate', response_url)
+                parse_error('Invalid alias command, your alias probably has a space in it', response_url)
+        elif len(split_message) <= 2:
+            parse_error('Invalid payment string', response_url)
+        elif (split_message[1].lower() == 'charge' or split_message[2].lower() == 'charge' or
+            split_message[1].lower() == 'pay' or split_message[2].lower() == 'pay'):
+            audience = 'friends'
+            if split_message[2].lower() == 'charge' or split_message[2].lower() == 'pay':
+                audience = split_message[1].lower()
+                if audience != 'public' and audience != 'friends' and audience != 'private':
+                    parse_error('Valid payment sharing commands\npublic\nfriend\nprivate', response_url)
+                    return
+                del split_message[1]
+            which = split_message[1]
+            if len(split_message) <= 6:
+                parse_error('Invalid payment string', response_url)
                 return
-            del split_message[1]
-        which = split_message[1]
-        if len(split_message) <= 6:
-            parse_error('Invalid payment string', response_url)
-            return
-        for_index = _find_str_in_list(split_message, 'for')
-        if for_index == -1:
-            parse_error('Invalid payment string', response_url)
-            return
-        amount_str_array = split_message[2:for_index]
-        amount = _calculate_total(amount_str_array, response_url)
-        if amount is None:
-            return
-        to_index = _find_last_str_in_list(split_message, 'to')
-        if to_index < 5:
-            parse_error('Could not find recipients', response_url)
-            return
-        note = ' '.join(split_message[(for_index + 1):to_index])
-        recipients = split_message[(to_index + 1):]
-        venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, response_url)
+            for_index = _find_str_in_list(split_message, 'for')
+            if for_index == -1:
+                parse_error('Invalid payment string', response_url)
+                return
+            amount_str_array = split_message[2:for_index]
+            amount = _calculate_total(amount_str_array, response_url)
+            if amount is None:
+                return
+            to_index = _find_last_str_in_list(split_message, 'to')
+            if to_index < 5:
+                parse_error('Could not find recipients', response_url)
+                return
+            note = ' '.join(split_message[(for_index + 1):to_index])
+            recipients = split_message[(to_index + 1):]
+            venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, response_url)
 
 if __name__ == '__main__':
     app.run(debug=False, use_reloader=False)
