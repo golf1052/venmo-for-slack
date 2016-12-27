@@ -412,14 +412,21 @@ def alias_user(user_id, id, alias, venmo_id, access_token, response_url):
     respond('Alias set!', response_url)
     return
 
-def _check_alias(user_id, alias):
+def _get_alias(user_id, alias):
     db = connect_to_mongo()
     user_doc = db.users.find_one({'_id': user_id})
     if 'alias' in user_doc:
         aliases = user_doc['alias']
         if alias in aliases:
-            return aliases[alias]['id']
+            return aliases[alias]
     return None
+
+def _check_alias(user_id, alias):
+    alias_obj = _get_alias(user_id, alias)
+    if alias_obj is not None:
+        return alias_obj['id']
+    else:
+        return None
 
 def list_aliases(user_id, response_url):
     db = connect_to_mongo()
@@ -433,6 +440,23 @@ def list_aliases(user_id, response_url):
     else:
         respond('You have no aliases set', response_url)
         return
+
+def delete_alias(user_id, alias, response_url):
+    alias_obj = _get_alias(user_id, alias)
+    if alias_obj is not None:
+        db = connect_to_mongo()
+        user = db.users.find_one({'_id': user_id})
+        db.users.update_one({'_id': user_id},
+            {'$unset': {
+                'alias.' + alias: 1
+                },
+            '$currentDate': {'lastModified': True}
+            }
+        )
+        respond('Alias deleted!', response_url)
+    else:
+        respond('That alias does not exist', response_url)
+    
 
 def venmo_pending(which, access_token, venmo_id, response_url):
     message = ''
@@ -518,6 +542,10 @@ def help(response_url):
            '    alias = the alias for that user, must not contain spaces\n'
            'venmo alias list\n'
            '    list all aliases\n'
+           'venmo alias delete alias\n'
+           '    example: venmo alias delete sam\n'
+           '    delete an alias\n'
+           '    alias = the alias for that user, must not contain spaces\n'
            'venmo pending (to OR from)\n'
            '    returns pending venmo charges, defaults to to\n'
            '    also returns ID for payment completion\n'
@@ -587,10 +615,13 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
             parse_error('Valid complete commands\nvenmo complete accept #\nvenmo complete reject #\nvenmo complete cancel #', response_url)
     elif split_message[1].lower() == 'alias':
         if len(split_message) == 4:
-            id = split_message[2]
-            alias = split_message[3]
-            alias_user(user_id, id, alias, venmo_id, access_token, response_url)
-        elif len(split_message) == 3 and split_message[2] == 'list':
+            if split_message[2].lower() == 'delete':
+                delete_alias(user_id, split_message[3].lower(), response_url)
+            else:
+                id = split_message[2]
+                alias = split_message[3].lower()
+                alias_user(user_id, id, alias, venmo_id, access_token, response_url)
+        elif len(split_message) == 3 and split_message[2].lower() == 'list':
             list_aliases(user_id, response_url)
         else:
             parse_error('Invalid alias command, your alias probably has a space in it', response_url)
