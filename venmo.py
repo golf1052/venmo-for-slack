@@ -305,6 +305,8 @@ def _calculate_total(amount_str_array, response_url):
                     parse_error('Invalid arithmetic string', response_url)
                     return None
     try:
+        if amount_str_array[0].startswith('$'):
+            amount_str_array[0] = amount_str_array[0][1:]
         final = float(amount_str_array[0])
         final = round(final, 2)
         return final
