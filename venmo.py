@@ -625,6 +625,10 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
                     parse_error('Valid pending commands\npending\npending to\npending from', response_url)
             else:
                 parse_error('Valid pending commands\npending\npending to\npending from', response_url)
+        elif split_message[1].lower() == 'accept' or split_message[1].lower() == 'reject' or split_message[1].lower() == 'cancel':
+            if len(split_message) == 3:
+                error_string = 'You probably meant: /venmo *complete* ' + split_message[1].lower() + ' ' + split_message[2].lower()
+                parse_error(error_string, response_url)
         elif split_message[1].lower() == 'complete':
             if len(split_message) == 4:
                 which = split_message[2].lower()
