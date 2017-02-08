@@ -133,14 +133,14 @@ def connect_to_mongo():
     client = MongoClient(connection_url)
     return client[db]
 
-def update_database(user_id, db, access_token, expires_date, refresh_token, id):
+def update_database(user_id, db, access_token, expires_date, refresh_token, new_id):
     return db.users.update_one({'_id': user_id},
         {'$set': {
             'venmo': {
                 'access_token': access_token,
                 'expires_in': expires_date,
                 'refresh_token': refresh_token,
-                'id': id
+                'id': new_id
                 }
             },
         '$currentDate': {'lastModified': True}
@@ -164,8 +164,6 @@ def get_access_token(user_id, response_url):
     else:
         expires_date = venmo_auth['venmo']['expires_in'].replace(tzinfo = pytz.utc)
         if expires_date < datetime.datetime.utcnow().replace(tzinfo = pytz.utc):
-            # for testing purposes
-            return 'expired'
             post_data = {
                 'client_id': config.get('Venmo', 'clientId'),
                 'client_secret': config.get('Venmo', 'clientSecret'),
@@ -176,8 +174,8 @@ def get_access_token(user_id, response_url):
             access_token = response_dict['access_token']
             expires_in = response_dict['expires_in']
             expires_date = (datetime.datetime.utcnow().replace(tzinfo = pytz.utc) + datetime.timedelta(seconds=expires_in))
-            id = response_dict['user']['id']
-            update_database(user_id, db, access_token, expires_date, response_dict['refresh_token'], id)
+            new_id = response_dict['user']['id']
+            update_database(user_id, db, access_token, expires_date, response_dict['refresh_token'], new_id)
             return access_token
         return venmo_auth['venmo']['access_token']
 
