@@ -97,6 +97,9 @@ def webhook():
                 break
         if user is None:
             return str('')
+        if _webhook_seen(user, data['data']['id']):
+            return str('')
+        _save_webhook_id(user, data['data']['id'])
         message += data['data']['target']['user']['display_name'] + ' '
         if data['data']['status'] == 'settled':
             message += 'accepted your '
