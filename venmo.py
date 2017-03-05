@@ -72,6 +72,9 @@ def webhook():
                 break
         if user is None:
             return str('')
+        if _webhook_seen(user, data['data']['id']):
+            return str('')
+        _save_webhook_id(user, data['data']['id'])
         message += data['data']['actor']['display_name'] + ' '
         if data['data']['action'] == 'pay':
             message += 'paid you '
@@ -197,6 +200,25 @@ def complete_auth(code, user_id, response_url):
     id = response_dict['user']['id']
     update_access_token = update_database(user_id, db, access_token, expires_date, refresh_token, id)
     respond('Authentication complete!', response_url)
+
+def _save_webhook_id(user_id, hook_id):
+    db = connect_to_mongo()
+    db.users.update_one({'_id': user_id},
+        {'$set': {
+            'lastWebhook': hook_id
+            },
+        '$currentDate': {'lastModified': True}
+        }
+    )
+
+def _webhook_seen(user_id, hook_id):
+    db = connect_to_mongo()
+    user = db.users.find_one({'_id': user_id})
+    if 'lastWebhook' in user:
+        last_webhook = user['lastWebhook']
+        if hook_id == last_webhook:
+            return True
+    return False
 
 def _get_venmo_id(access_token):
     response = requests.get('http://api.venmo.com/v1/me?access_token=' + access_token)
