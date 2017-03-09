@@ -535,7 +535,7 @@ def venmo_complete_all(which, access_token, venmo_id, response_url):
     elif which == 'cancel':
         action = 'cancel'
     pending_url = 'https://api.venmo.com/v1/payments?access_token=' + access_token + '&status=pending'
-    pending_response = requests.get(url)
+    pending_response = requests.get(pending_url)
     pending_response_dict = pending_response.json()
     if 'error' in pending_response_dict:
         venmo_error(pending_response_dict['error'], response_url)
@@ -550,7 +550,12 @@ def venmo_complete_all(which, access_token, venmo_id, response_url):
             if pending['actor']['id'] == venmo_id:
                 pending_ids.append(pending['id'])
     if len(pending_ids) == 0:
-        respond('No Venmos to complete', response_url)
+        if action == 'approve':
+            respond('No Venmos to accept', response_url)
+        elif action == 'deny':
+            respond('No Venmos to reject', response_url)
+        elif action == 'cancel':
+            respond('No Venmos to cancel', response_url)
         return
     for number in pending_ids:
         complete_url = 'https://api.venmo.com/v1/payments/' + str(number)
