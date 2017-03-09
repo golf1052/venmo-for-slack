@@ -60,13 +60,15 @@
         <p>Example: <code>/venmo pending to</code></p>
         <p>Example: <code>/venmo pending from</code></p>
     </div>
-    <h4>/venmo complete {accept/reject/cancel:required} {ids:required}</h4>
+    <h4>/venmo complete {accept/reject/cancel:required} {ids:required OR all}</h4>
     <div class="indent">
         <p>accept/reject pending incoming Venmos with the specified IDs</p>
         <p>cancel pending outgoing Venmos with the specified IDs</p>
+        <p>accept/reject/cancel all Venmos</p>
         <p>ids: Venmo payment IDs</p>
         <p>Example: <code>/venmo complete accept 987134987329743243</code></p>
         <p>Example: <code>/venmo complete accept 456734987329744567 134534987329743846</code></p>
+        <p>Example: <code>/venmo complete accept all</code></p>
     </div>
     <h4>/venmo code {code:required}</h4>
     <div class="indent">
