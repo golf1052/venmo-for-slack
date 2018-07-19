@@ -162,10 +162,7 @@ def get_access_token(user_id, response_url):
         if user_doc == None:
             create_user_doc = db.users.insert_one({'_id': user_id})
         create_venmo_auth = update_database(user_id, db, '', '', '', '')
-        auth_url = 'https://api.venmo.com/v1/oauth/authorize?client_id=' + config.get('Venmo', 'clientId') + '&scope=make_payments%20access_payment_history%20access_feed%20access_profile%20access_email%20access_phone%20access_balance%20access_friends&response_type=code'
-        url_message = ('Authenticate to Venmo with the following URL: ' + auth_url + ' then send back the auth code in this format\n'
-                       'venmo code CODE')
-        respond(url_message, response_url)
+        request_auth(config, response_url)
         return None
     else:
         expires_date = venmo_auth['venmo']['expires_in'].replace(tzinfo = pytz.utc)
@@ -176,6 +173,10 @@ def get_access_token(user_id, response_url):
                 'refresh_token': venmo_auth['venmo']['refresh_token']
                 }
             response = requests.post('https://api.venmo.com/v1/oauth/access_token', post_data)
+            if response.status_code == 400:
+                update_database(user_id, db, '', '', '', '')
+                request_auth(config, response_url)
+                return None
             response_dict = response.json()
             access_token = response_dict['access_token']
             expires_in = response_dict['expires_in']
@@ -184,6 +185,12 @@ def get_access_token(user_id, response_url):
             update_database(user_id, db, access_token, expires_date, response_dict['refresh_token'], new_id)
             return access_token
         return venmo_auth['venmo']['access_token']
+
+def request_auth(config, response_url):
+    auth_url = 'https://api.venmo.com/v1/oauth/authorize?client_id=' + config.get('Venmo', 'clientId') + '&scope=make_payments%20access_payment_history%20access_feed%20access_profile%20access_email%20access_phone%20access_balance%20access_friends&response_type=code'
+    url_message = ('Authenticate to Venmo with the following URL: ' + auth_url + ' then send back the auth code in this format\n'
+                    'venmo code CODE')
+    respond(url_message, response_url)
 
 def complete_auth(code, user_id, response_url):
     config = ConfigParser.ConfigParser()
