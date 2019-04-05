@@ -139,6 +139,16 @@ def connect_to_mongo():
     client = MongoClient(connection_url)
     return client[db]
 
+def update_database(user_id, db, access_token, expires_date, refresh_token):
+    return db.users.update_one({'_id': user_id},
+        {'$set': {
+            'venmo.access_token': access_token,
+            'venmo.expires_in': expires_date,
+            'venmo.refresh_token': refresh_token
+            },
+        '$currentDate': {'lastModified': True}
+        })
+
 def update_database(user_id, db, access_token, expires_date, refresh_token, new_id):
     return db.users.update_one({'_id': user_id},
         {'$set': {
@@ -181,8 +191,7 @@ def get_access_token(user_id, response_url):
             access_token = response_dict['access_token']
             expires_in = response_dict['expires_in']
             expires_date = (datetime.datetime.utcnow().replace(tzinfo = pytz.utc) + datetime.timedelta(seconds=expires_in))
-            new_id = response_dict['user']['id']
-            update_database(user_id, db, access_token, expires_date, response_dict['refresh_token'], new_id)
+            update_database(user_id, db, access_token, expires_date, response_dict['refresh_token'])
             return access_token
         return venmo_auth['venmo']['access_token']
 
