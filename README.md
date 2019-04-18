@@ -52,3 +52,5 @@ The bot integration was turned into a Flask app so that it could become a slash 
 
 ## Slack
 Once the app is up and running create a new slash command integration on Slack. Set the command as /venmo and set the URL to where ever you set up your Flask app on. Save the integration and you should be good to go!
+
+Testing
