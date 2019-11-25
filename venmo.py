@@ -650,7 +650,7 @@ def help(response_url):
            '    example: venmo charge 20 + 40 / 3 for brunch to a_user boss phone:5556667777\n'
            '        this would charge $20 NOT $33.33 to each user in the recipients list\n'
            '    audience (optional) = public OR friends OR private\n'
-           '        defaults to friends if omitted\n'
+           '        defaults to private if omitted\n'
            '    pay/charge = pay OR charge\n'
            '    amount = Venmo amount\n'
            '    note = Venmo message\n'
@@ -755,7 +755,7 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
             parse_error('Invalid payment string', response_url)
         elif (split_message[1].lower() == 'charge' or split_message[2].lower() == 'charge' or
             split_message[1].lower() == 'pay' or split_message[2].lower() == 'pay'):
-            audience = 'friends'
+            audience = 'private'
             if split_message[2].lower() == 'charge' or split_message[2].lower() == 'pay':
                 audience = split_message[1].lower()
                 if audience != 'public' and audience != 'friends' and audience != 'private':
