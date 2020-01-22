@@ -240,7 +240,7 @@ def _webhook_seen(user_id, hook_id):
     return False
 
 def _get_venmo_id(access_token):
-    response = requests.get('http://api.venmo.com/v1/me?access_token=' + access_token)
+    response = requests.get('https://api.venmo.com/v1/me?access_token=' + access_token)
     response_dict = response.json()
     if 'error' in response_dict:
         venmo_error(response_dict['error'], response_url)
