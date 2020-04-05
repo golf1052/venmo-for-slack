@@ -27,6 +27,7 @@ def serve_css(filename):
 
 @app.route('/', methods=['POST'])
 def process():
+    load_config()
     user_id = request.values.get('user_id')
     message = request.values.get('text')
     response_url = request.values.get('response_url')
@@ -62,6 +63,7 @@ def webhook_get():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
+    load_config()
     data = request.get_json()
     dbs = connect_to_mongo_dbs()
     user = None
@@ -783,6 +785,12 @@ def parse_message(message, access_token, user_id, team_id, venmo_id, response_ur
             note = ' '.join(split_message[(for_index + 1):to_index])
             recipients = split_message[(to_index + 1):]
             venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, team_id, response_url)
+
+def load_config():
+    config.credentials = ConfigParser.ConfigParser()
+    config.credentials.read('credentials.ini')
+    with open('settings.json', 'r') as f:
+        config.workspaces = json.loads(f.read())
 
 if __name__ == '__main__':
     config.credentials = ConfigParser.ConfigParser()
