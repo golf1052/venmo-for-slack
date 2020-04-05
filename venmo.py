@@ -26,13 +26,14 @@ def serve_css(filename):
 
 @app.route('/', methods=['POST'])
 def process():
-    credentials = ConfigParser.ConfigParser()
-    credentials.read('credentials.ini')
     user_id = request.values.get('user_id')
     message = request.values.get('text')
     response_url = request.values.get('response_url')
     token = request.values.get('token')
-    verification_token = credentials.get('Slack', 'token')
+    team_id = request.values.get('team_id')
+    if team_id not in workspaces['workspaces']:
+        return str('Team not configured to use Venmo')
+    verification_token = workspaces['workspaces'][team_id]['token']
     if token != verification_token:
         return str('Team verification token mismatch')
     split_message = message.split()
@@ -41,16 +42,16 @@ def process():
             if len(split_message) == 1:
                 help(response_url)
             else:
-                complete_auth(split_message[1], user_id, response_url)
+                complete_auth(split_message[1], user_id, team_id, response_url)
                 return str('')
-    access_token = get_access_token(user_id, response_url)
+    access_token = get_access_token(user_id, team_id, response_url)
     if access_token != None:
         if access_token == 'expired':
             respond('Access token is expired, Sanders needs to debug this. So go bother him or something.', response_url)
         else:
             venmo_id = _get_venmo_id(access_token)
             if venmo_id != '':
-                parse_message('venmo ' + message, access_token, user_id, venmo_id, response_url)
+                parse_message('venmo ' + message, access_token, user_id, team_id, venmo_id, response_url)
     return str('')
 
 @app.route('/webhook', methods=['GET'])
@@ -61,20 +62,16 @@ def webhook_get():
 @app.route('/webhook', methods=['POST'])
 def webhook():
     data = request.get_json()
-    db = connect_to_mongo()
-    users = list(db.users.find())
+    dbs = connect_to_mongo_dbs()
     user = None
     message = ''
     if data['type'] == 'payment.created':
-        for user in users:
-            if user['venmo']['id'] == data['data']['target']['user']['id']:
-                user = user['_id']
-                break
+        (db, user) = _get_user_from_dbs(dbs, data['data']['target']['user']['id'])
         if user is None:
             return str('')
-        if _webhook_seen(user, data['data']['id']):
+        if _webhook_seen(db, user, data['data']['id']):
             return str('')
-        _save_webhook_id(user, data['data']['id'])
+        _save_webhook_id(db, user, data['data']['id'])
         message += data['data']['actor']['display_name'] + ' '
         if data['data']['action'] == 'pay':
             message += 'paid you '
@@ -91,15 +88,12 @@ def webhook():
     elif data['type'] == 'payment.updated':
         if data['data']['target']['type'] != 'user':
             return str('')
-        for user in users:
-            if user['venmo']['id'] == data['data']['actor']['id']:
-                user = user['_id']
-                break
+        (db, user) = _get_user_from_dbs(dbs, data['data']['actor']['id'])
         if user is None:
             return str('')
-        if _webhook_seen(user, data['data']['id']):
+        if _webhook_seen(db, user, data['data']['id']):
             return str('')
-        _save_webhook_id(user, data['data']['id'])
+        _save_webhook_id(db, user, data['data']['id'])
         message += data['data']['target']['user']['display_name'] + ' '
         if data['data']['status'] == 'settled':
             message += 'accepted your '
@@ -110,9 +104,18 @@ def webhook():
         send_slack_message(message, user)
     return str('')
 
+# returns tuple of (db, user_id) with db that user is located in, returns None if user was not found
+def _get_user_from_dbs(dbs, venmo_user_id):
+    for workspace in workspaces['workspaces']:
+        db_name = credentials.get("Mongo", "database") + "_" + workspace
+        db = dbs[db_name]
+        users = list(db.users.find())
+        for user in users:
+            if user['venmo']['id'] == venmo_user_id:
+                return (db, user['_id'])
+    return None
+
 def send_slack_message(message, channel):
-    credentials = ConfigParser.ConfigParser()
-    credentials.read('credentials.ini')
     bot_token = credentials.get('Slack', 'bot-token')
     o = {}
     o['token'] = bot_token
@@ -128,16 +131,20 @@ def respond(message, response_url):
     response = requests.post(response_url, json=o)
 
 # Connects to mongo and returns a MongoClient
-def connect_to_mongo():
-    credentials = ConfigParser.ConfigParser()
-    credentials.read("credentials.ini")
+def connect_to_mongo(team_id):
+    client = connect_to_mongo_dbs()
+    db = credentials.get("Mongo", "database")
+    db += "_" + team_id
+    return client[db]
+
+# Connects to Mongo and returns a MongoClient NOT connected to any databases
+def connect_to_mongo_dbs():
     host = credentials.get("Mongo", "connection")
     user = credentials.get("Mongo", "user")
     password = credentials.get("Mongo", "password")
-    db = credentials.get("Mongo", "database")
-    connection_url = "mongodb://" + user + ":" + password + "@" + host + "/" + db
+    connection_url = "mongodb://" + user + ":" + password + "@" + host + "/"
     client = MongoClient(connection_url)
-    return client[db]
+    return client
 
 def update_database(user_id, db, access_token, expires_date, refresh_token):
     return db.users.update_one({'_id': user_id},
@@ -162,30 +169,28 @@ def update_database(user_id, db, access_token, expires_date, refresh_token, new_
         '$currentDate': {'lastModified': True}
         })
 
-def get_access_token(user_id, response_url):
-    config = ConfigParser.ConfigParser()
-    config.read('credentials.ini')
-    db = connect_to_mongo()
+def get_access_token(user_id, team_id, response_url):
+    db = connect_to_mongo(team_id)
     venmo_auth = db.users.find_one({'_id': user_id}, {'venmo': 1})
     if venmo_auth == None or 'venmo' not in venmo_auth or venmo_auth['venmo'] == {} or venmo_auth['venmo']['access_token'] == '':
         user_doc = db.users.find_one({'_id': user_id})
         if user_doc == None:
             create_user_doc = db.users.insert_one({'_id': user_id})
         create_venmo_auth = update_database(user_id, db, '', '', '', '')
-        request_auth(config, response_url)
+        request_auth(credentials, response_url)
         return None
     else:
         expires_date = venmo_auth['venmo']['expires_in'].replace(tzinfo = pytz.utc)
         if expires_date < datetime.datetime.utcnow().replace(tzinfo = pytz.utc):
             post_data = {
-                'client_id': config.get('Venmo', 'clientId'),
-                'client_secret': config.get('Venmo', 'clientSecret'),
+                'client_id': credentials.get('Venmo', 'clientId'),
+                'client_secret': credentials.get('Venmo', 'clientSecret'),
                 'refresh_token': venmo_auth['venmo']['refresh_token']
                 }
             response = requests.post('https://api.venmo.com/v1/oauth/access_token', post_data)
             if response.status_code == 400:
                 update_database(user_id, db, '', '', '', '')
-                request_auth(config, response_url)
+                request_auth(credentials, response_url)
                 return None
             response_dict = response.json()
             access_token = response_dict['access_token']
@@ -201,13 +206,11 @@ def request_auth(config, response_url):
                     'venmo code CODE')
     respond(url_message, response_url)
 
-def complete_auth(code, user_id, response_url):
-    config = ConfigParser.ConfigParser()
-    config.read('credentials.ini')
-    db = connect_to_mongo()
+def complete_auth(code, user_id, team_id, response_url):
+    db = connect_to_mongo(team_id)
     post_data = {
-        'client_id': config.get('Venmo', 'clientId'),
-        'client_secret': config.get('Venmo', 'clientSecret'),
+        'client_id': credentials.get('Venmo', 'clientId'),
+        'client_secret': credentials.get('Venmo', 'clientSecret'),
         'code': code
         }
     response = requests.post('https://api.venmo.com/v1/oauth/access_token', post_data)
@@ -220,8 +223,7 @@ def complete_auth(code, user_id, response_url):
     update_access_token = update_database(user_id, db, access_token, expires_date, refresh_token, id)
     respond('Authentication complete!', response_url)
 
-def _save_webhook_id(user_id, hook_id):
-    db = connect_to_mongo()
+def _save_webhook_id(db, user_id, hook_id):
     db.users.update_one({'_id': user_id},
         {'$set': {
             'lastWebhook': hook_id
@@ -230,8 +232,7 @@ def _save_webhook_id(user_id, hook_id):
         }
     )
 
-def _webhook_seen(user_id, hook_id):
-    db = connect_to_mongo()
+def _webhook_seen(db, user_id, hook_id):
     user = db.users.find_one({'_id': user_id})
     if 'lastWebhook' in user:
         last_webhook = user['lastWebhook']
@@ -367,7 +368,7 @@ def _mathify(num1, sign, num2):
     else:
         raise ArithmeticError('Unknown sign')
 
-def venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, response_url):
+def venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, team_id, response_url):
     url = 'https://api.venmo.com/v1/payments'
     amount_str = str(amount)
     if which == 'charge':
@@ -385,15 +386,15 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
             id = r[6:]
             post_data['email'] = id
         else:
-            id = _check_alias(user_id, r)
+            id = _check_alias(user_id, team_id, r)
             if id is None:
-                id = _check_cache(user_id, r)
+                id = _check_cache(user_id, team_id, r)
                 if id is None:
                     if full is None:
                         full = _get_friends(venmo_id, access_token, response_url)
                     id = _find_friend(full, r)
                     if id is not None:
-                        _add_to_cache(user_id, r, id)
+                        _add_to_cache(user_id, team_id, r, id)
             if id is None:
                 parse_error('You are not friends with ' + r, response_url)
                 continue
@@ -420,8 +421,8 @@ def venmo_payment(audience, which, amount, note, recipients, access_token, venmo
                 final_message += 'Successfully paid ' + name + ' $' + '{:0,.2f}'.format(response_dict['data']['payment']['amount']) + ' for ' + response_dict['data']['payment']['note'] + '. Audience is ' + audience + '.\n'
     respond(final_message, response_url)
 
-def _add_to_cache(user_id, id, venmo_id):
-    db = connect_to_mongo()
+def _add_to_cache(user_id, team_id, id, venmo_id):
+    db = connect_to_mongo(team_id)
     user = db.users.find_one({'_id': user_id})
     db.users.update_one({'_id': user_id},
         {'$set': {
@@ -431,8 +432,8 @@ def _add_to_cache(user_id, id, venmo_id):
         })
     return
 
-def _check_cache(user_id, id):
-    db = connect_to_mongo()
+def _check_cache(user_id, team_id, id):
+    db = connect_to_mongo(team_id)
     user = db.users.find_one({'_id': user_id})
     if 'cache' in user:
         cache = user['cache']
@@ -440,13 +441,13 @@ def _check_cache(user_id, id):
             return cache[id]['id']
     return None
 
-def alias_user(user_id, id, alias, venmo_id, access_token, response_url):
+def alias_user(user_id, team_id, id, alias, venmo_id, access_token, response_url):
     friends = _get_friends(venmo_id, access_token, response_url)
     friend_id = _find_friend(friends, id)
     if friend_id == None:
         parse_error('You are not friends with ' + id, response_url)
         return
-    db = connect_to_mongo()
+    db = connect_to_mongo(team_id)
     user = db.users.find_one({'_id': user_id})
     db.users.update_one({'_id': user_id},
         {'$set': {
@@ -457,8 +458,8 @@ def alias_user(user_id, id, alias, venmo_id, access_token, response_url):
     respond('Alias set!', response_url)
     return
 
-def _get_alias(user_id, alias):
-    db = connect_to_mongo()
+def _get_alias(user_id, team_id, alias):
+    db = connect_to_mongo(team_id)
     user_doc = db.users.find_one({'_id': user_id})
     if 'alias' in user_doc:
         aliases = user_doc['alias']
@@ -466,15 +467,15 @@ def _get_alias(user_id, alias):
             return aliases[alias]
     return None
 
-def _check_alias(user_id, alias):
-    alias_obj = _get_alias(user_id, alias)
+def _check_alias(user_id, team_id, alias):
+    alias_obj = _get_alias(user_id, team_id, alias)
     if alias_obj is not None:
         return alias_obj['id']
     else:
         return None
 
-def list_aliases(user_id, response_url):
-    db = connect_to_mongo()
+def list_aliases(user_id, team_id, response_url):
+    db = connect_to_mongo(team_id)
     user = db.users.find_one({'_id': user_id})
     if 'alias' in user:
         alias_list = ''
@@ -486,10 +487,10 @@ def list_aliases(user_id, response_url):
         respond('You have no aliases set', response_url)
         return
 
-def delete_alias(user_id, alias, response_url):
-    alias_obj = _get_alias(user_id, alias)
+def delete_alias(user_id, team_id, alias, response_url):
+    alias_obj = _get_alias(user_id, team_id, alias)
     if alias_obj is not None:
-        db = connect_to_mongo()
+        db = connect_to_mongo(team_id)
         db.users.update_one({'_id': user_id},
             {'$unset': {
                 'alias.' + alias: 1
@@ -501,8 +502,8 @@ def delete_alias(user_id, alias, response_url):
     else:
         respond('That alias does not exist', response_url)
 
-def save_last_message(user_id, message):
-    db = connect_to_mongo()
+def save_last_message(user_id, team_id, message):
+    db = connect_to_mongo(team_id)
     db.users.update_one({'_id': user_id},
         {'$set': {
             'last': message
@@ -511,8 +512,8 @@ def save_last_message(user_id, message):
         }
     )
 
-def get_last_message(user_id, response_url):
-    db = connect_to_mongo()
+def get_last_message(user_id, team_id, response_url):
+    db = connect_to_mongo(team_id)
     user = db.users.find_one({'_id': user_id})
     if 'last' in user:
         respond('/' + user['last'], response_url)
@@ -697,18 +698,18 @@ def _find_last_str_in_list(list, str):
             index = i
     return index
 
-def parse_message(message, access_token, user_id, venmo_id, response_url):
+def parse_message(message, access_token, user_id, team_id, venmo_id, response_url):
     split_message = message.split()
     if len(split_message) == 1:
         help(response_url)
     elif split_message[1].lower() == 'help':
         help(response_url)
     elif split_message[1].lower() == 'last':
-        get_last_message(user_id, response_url)
+        get_last_message(user_id, team_id, response_url)
     elif split_message[1].lower() == 'code':
-        complete_auth(split_message[2], user_id, response_url)
+        complete_auth(split_message[2], user_id, team_id, response_url)
     else:
-        save_last_message(user_id, message)
+        save_last_message(user_id, team_id, message)
         if split_message[1].lower() == 'balance':
             get_venmo_balance(access_token, response_url)
         elif split_message[1].lower() == 'pending':
@@ -742,13 +743,13 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
         elif split_message[1].lower() == 'alias':
             if len(split_message) == 4:
                 if split_message[2].lower() == 'delete':
-                    delete_alias(user_id, split_message[3].lower(), response_url)
+                    delete_alias(user_id, team_id, split_message[3].lower(), response_url)
                 else:
                     id = split_message[2]
                     alias = split_message[3].lower()
-                    alias_user(user_id, id, alias, venmo_id, access_token, response_url)
+                    alias_user(user_id, team_id, id, alias, venmo_id, access_token, response_url)
             elif len(split_message) == 3 and split_message[2].lower() == 'list':
-                list_aliases(user_id, response_url)
+                list_aliases(user_id, team_id, response_url)
             else:
                 parse_error('Invalid alias command, your alias probably has a space in it', response_url)
         elif len(split_message) <= 2:
@@ -780,7 +781,11 @@ def parse_message(message, access_token, user_id, venmo_id, response_url):
                 return
             note = ' '.join(split_message[(for_index + 1):to_index])
             recipients = split_message[(to_index + 1):]
-            venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, response_url)
+            venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, team_id, response_url)
 
 if __name__ == '__main__':
+    credentials = ConfigParser.ConfigParser()
+    credentials.read('credentials.ini')
+    with open('settings.json', 'r') as f:
+        workspaces = json.loads(f.read())
     app.run(debug=False, use_reloader=False)
