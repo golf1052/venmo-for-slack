@@ -1,3 +1,4 @@
+import config
 from flask import Flask, request, send_from_directory
 import ConfigParser
 import requests
@@ -31,9 +32,9 @@ def process():
     response_url = request.values.get('response_url')
     token = request.values.get('token')
     team_id = request.values.get('team_id')
-    if team_id not in workspaces['workspaces']:
+    if team_id not in config.workspaces['workspaces']:
         return str('Team not configured to use Venmo')
-    verification_token = workspaces['workspaces'][team_id]['token']
+    verification_token = config.workspaces['workspaces'][team_id]['token']
     if token != verification_token:
         return str('Team verification token mismatch')
     split_message = message.split()
@@ -106,8 +107,8 @@ def webhook():
 
 # returns tuple of (db, user_id) with db that user is located in, returns None if user was not found
 def _get_user_from_dbs(dbs, venmo_user_id):
-    for workspace in workspaces['workspaces']:
-        db_name = credentials.get("Mongo", "database") + "_" + workspace
+    for workspace in config.workspaces['workspaces']:
+        db_name = config.credentials.get("Mongo", "database") + "_" + workspace
         db = dbs[db_name]
         users = list(db.users.find())
         for user in users:
@@ -116,7 +117,7 @@ def _get_user_from_dbs(dbs, venmo_user_id):
     return None
 
 def send_slack_message(message, channel):
-    bot_token = credentials.get('Slack', 'bot-token')
+    bot_token = config.credentials.get('Slack', 'bot-token')
     o = {}
     o['token'] = bot_token
     o['channel'] = channel
@@ -133,15 +134,15 @@ def respond(message, response_url):
 # Connects to mongo and returns a MongoClient
 def connect_to_mongo(team_id):
     client = connect_to_mongo_dbs()
-    db = credentials.get("Mongo", "database")
+    db = config.credentials.get("Mongo", "database")
     db += "_" + team_id
     return client[db]
 
 # Connects to Mongo and returns a MongoClient NOT connected to any databases
 def connect_to_mongo_dbs():
-    host = credentials.get("Mongo", "connection")
-    user = credentials.get("Mongo", "user")
-    password = credentials.get("Mongo", "password")
+    host = config.credentials.get("Mongo", "connection")
+    user = config.credentials.get("Mongo", "user")
+    password = config.credentials.get("Mongo", "password")
     connection_url = "mongodb://" + user + ":" + password + "@" + host + "/"
     client = MongoClient(connection_url)
     return client
@@ -177,20 +178,20 @@ def get_access_token(user_id, team_id, response_url):
         if user_doc == None:
             create_user_doc = db.users.insert_one({'_id': user_id})
         create_venmo_auth = update_database(user_id, db, '', '', '', '')
-        request_auth(credentials, response_url)
+        request_auth(config.credentials, response_url)
         return None
     else:
         expires_date = venmo_auth['venmo']['expires_in'].replace(tzinfo = pytz.utc)
         if expires_date < datetime.datetime.utcnow().replace(tzinfo = pytz.utc):
             post_data = {
-                'client_id': credentials.get('Venmo', 'clientId'),
-                'client_secret': credentials.get('Venmo', 'clientSecret'),
+                'client_id': config.credentials.get('Venmo', 'clientId'),
+                'client_secret': config.credentials.get('Venmo', 'clientSecret'),
                 'refresh_token': venmo_auth['venmo']['refresh_token']
                 }
             response = requests.post('https://api.venmo.com/v1/oauth/access_token', post_data)
             if response.status_code == 400:
                 update_database(user_id, db, '', '', '', '')
-                request_auth(credentials, response_url)
+                request_auth(config.credentials, response_url)
                 return None
             response_dict = response.json()
             access_token = response_dict['access_token']
@@ -209,8 +210,8 @@ def request_auth(config, response_url):
 def complete_auth(code, user_id, team_id, response_url):
     db = connect_to_mongo(team_id)
     post_data = {
-        'client_id': credentials.get('Venmo', 'clientId'),
-        'client_secret': credentials.get('Venmo', 'clientSecret'),
+        'client_id': config.credentials.get('Venmo', 'clientId'),
+        'client_secret': config.credentials.get('Venmo', 'clientSecret'),
         'code': code
         }
     response = requests.post('https://api.venmo.com/v1/oauth/access_token', post_data)
@@ -784,8 +785,8 @@ def parse_message(message, access_token, user_id, team_id, venmo_id, response_ur
             venmo_payment(audience, which, amount, note, recipients, access_token, venmo_id, user_id, team_id, response_url)
 
 if __name__ == '__main__':
-    credentials = ConfigParser.ConfigParser()
-    credentials.read('credentials.ini')
+    config.credentials = ConfigParser.ConfigParser()
+    config.credentials.read('credentials.ini')
     with open('settings.json', 'r') as f:
-        workspaces = json.loads(f.read())
-    app.run(debug=True, use_reloader=False)
+        config.workspaces = json.loads(f.read())
+    app.run(debug=False, use_reloader=False)
