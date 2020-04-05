@@ -788,4 +788,4 @@ if __name__ == '__main__':
     credentials.read('credentials.ini')
     with open('settings.json', 'r') as f:
         workspaces = json.loads(f.read())
-    app.run(debug=False, use_reloader=False)
+    app.run(debug=True, use_reloader=False)
